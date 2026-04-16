@@ -1,0 +1,131 @@
+import numpy as np
+import scipy as sp
+import matplotlib.pyplot as pl
+from numpy.random import RandomState
+from scipy.integrate import quad
+from scipy.interpolate import interp1d
+s = RandomState()
+particles = 10000 #number of particles
+m_halo = 10**12 #halo mass
+p_halo = m_halo/particles #individual particle mass for a halo
+r_vir = 300 #virial radius in kpc (falloff radius)
+m_disk = 4*(10**10) #disk mass
+p_disk = m_disk/particles #individual particle mass for a disk
+d_scale = 3 #disk scale length
+G = 6.674*(10**-11)
+c = 15
+r_trunc = 0.01
+nfw_dispersion = np.loadtxt('NFW_dispersion.dat')
+
+'''
+CHECK UNITS PLEASE FOR THE LOVE OF GOD WHY ARE THERE 4 SYSTEMS OF UNITS
+'''
+
+#Coordinate transforms
+def c_sphere(x,y,z):
+    r = np.sqrt((x**2) + (y**2) + (z**2))
+    theta = np.asin(z/r)
+    phi = np.acos(x/(r*np.cos(theta)))
+    return (r,theta, phi)
+def s_cart(r,theta,phi):
+    x = r*np.cos(theta)*np.cos(phi)
+    y = r*np.cos(theta)*np.sin(phi)
+    z = r*np.sin(theta)
+    return x,y,z
+def c_cylind(x,y,z):
+    r = np.sqrt((x**2) + (y**2) + (z**2))
+    theta = np.acos(x/r)
+    z = z
+    return(r,theta,z)
+def c_cart(r,theta,z):
+    x = r*np.cos(theta)
+    y = r*np.sin(theta+(np.pi/2))
+    z = z
+    return(x,y,z)
+
+#Phase space setup
+phase_isotherm = np.zeros((6,particles))
+phase_nfw = np.zeros((6,particles))
+phase_vc_halo = np.zeros((6,particles))
+phase_vc_disk = np.zeros((6,particles))
+phase_vc_disk_halo = np.zeros((6,particles))
+
+''' 
+Convention: Each column represents a particle in phase space. The entries down
+a column proceed in the following order: x, y, z, vx, vy, vz.
+'''
+
+'''
+#Isothermal model, working phase space in spherical coordinates
+r_isotherm = np.zeros((6,particles))
+for i in range(len(phase_isotherm[0,:])):
+    rand = s.rand(len(phase_isotherm[0,:]))
+    phase_isotherm[0,i] = r_vir*rand[i] #radial mass distribution
+    phase_isotherm[1,i] = (2*rand[i])-1 #cosine of theta coordinate
+    phase_isotherm[2,i] = 2*np.pi*rand[i] #phi coordinate
+    density_isotherm = m_halo/(r_vir**3) #rho_0
+    v_c = np.sqrt((4*np.pi*G))
+    phase_isotherm[3,i] = v_c * (1+(rand[i]/np.sqrt(3)))
+    phase_isotherm[4,i] = v_c * (1+(rand[i]/np.sqrt(3)))
+    phase_isotherm[5,i] = v_c * (1+(rand[i]/np.sqrt(3)))
+isotherm_cart = s_cart(phase_isotherm[0],np.acos(phase_isotherm[1]),phase_isotherm[2])
+'''
+
+#I'm not sure the above is working, but I would like to have something down for each. Check later.
+
+#NFW model, once again in spherical coordinates
+#Radial distribution: R_vir = 1, M(R_vir) = 1, c = R_vir/r_s
+def nfw_dist(r):
+    p0 = ((c**3)/(4*np.pi))*((np.log(1+c) - (c/(1+c)))**(-1))
+    p = p0/(c*r*((1+(c*r))**2))
+    return p #returns density inside radius r
+#M = (4*np.pi*p0/(c**3))*(np.log(1+(c*r)) - (c*r)/(1+(c*r)))
+
+#acceptance-rejection for NFW distribution
+r_nfw_kept = np.zeros(4*len(phase_nfw[0,:]))
+xrand = r_trunc + s.rand(4*len(phase_nfw[0,:]))
+yrand = nfw_dist(r_trunc + s.rand(4*len(phase_nfw[0,:])))
+index = np.where(yrand < nfw_dist(xrand))[0]
+r_nfw_kept[index] = xrand[index]        
+
+#IT ACTUALLY WORKS
+
+nfw_disp_interp = sp.interpolate.interp1d(nfw_dispersion[:,0], nfw_dispersion[:,1])
+for i in range(len(phase_nfw[0,:])):
+    rand = s.rand(len(phase_nfw[0,:]))
+    phase_nfw[0,i] = r_nfw_kept[i] #radial mass distribution
+    phase_nfw[1,i] = (2*rand[i])-1 #cosine of theta coordinate
+    phase_nfw[2,i] = 2*np.pi*rand[i] #phi coordinate
+    density_isotherm = m_halo/(r_vir**3) #rho_0
+    v_c = np.sqrt((4*np.pi*G))
+    phase_nfw[3,i] = v_c * (1+(phase_nfw[0,i]*nfw_disp_interp(1.96*rand[i])))
+    phase_nfw[4,i] = v_c * (1+(phase_nfw[0,i]*nfw_disp_interp(1.96*rand[i])))
+    phase_nfw[5,i] = v_c * (1+(phase_nfw[0,i]*nfw_disp_interp(1.96*rand[i])))
+#p is the density at radius r, with M being the mass inside radius r
+
+def sigma_dist(r):
+    s0 = m_disk/(2*np.pi*(d_scale**2))
+    sigma = s0 * np.exp(-r/d_scale)
+    return sigma #returns density inside radius r
+d_nfw_kept = np.zeros(4*len(phase_vc_halo[0,:]))
+xrand_dnfw = s.rand(4*len(phase_vc_halo[0,:]))
+yrand_dnfw = sigma_dist(s.rand(4*len(phase_vc_halo[0,:])))
+index = np.where(yrand_dnfw < sigma_dist(xrand_dnfw))[0]
+d_nfw_kept[index] = xrand_dnfw[index]
+
+#Exponential disk model, NFW halo
+for i in range(len(phase_vc_disk[0,:])):
+    rand = s.rand(len(phase_vc_disk[0,:]))
+    phase_vc_disk[0,i] = r_nfw_kept[i] #radial mass distribution
+    phase_vc_disk[1,i] = 0.3*s.randn(len(phase_vc_disk[0,:]))[i] #z coordinate
+    phase_vc_disk[2,i] = 2*np.pi*rand[i] #phi coordinate
+    v_c = np.sqrt((4*np.pi*G))
+    phase_vc_disk[3,i] = v_c
+    phase_vc_disk[4,i] = v_c 
+    phase_vc_disk[5,i] = v_c
+#p is the density at radius r, with M being the mass inside radius r
+
+r = np.linspace(0,1,particles)
+pl.plot(r,2*np.pi*r*sigma_dist(r))
+#pl.hist(2*np.pi*d_nfw_kept*sigma_dist(d_nfw_kept))
+pl.show()
