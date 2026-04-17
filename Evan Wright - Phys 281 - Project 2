@@ -15,38 +15,43 @@ m_disk = 4*(10**10) #disk mass
 p_disk = m_disk/particles #individual particle mass for a disk
 d_scale = 3 #disk scale length
 
-G = 6.674*(10**-11)
-c = 15
-r_trunc = 0.01
+G = 6.674*(10**-11) #newton gravitational constant
+c = 15 #concentration
+r_trunc = 0.01 #truncation radius
 nfw_dispersion = np.loadtxt('NFW_dispersion.dat')
 
 '''
 CHECK UNITS PLEASE FOR THE LOVE OF GOD WHY ARE THERE 4 SYSTEMS OF UNITS
 '''
 
-#Coordinate transforms
+#Coordinate transform functions
 def c_sphere(x,y,z):
+    #cartesian to spherical
     r = np.sqrt((x**2) + (y**2) + (z**2))
     theta = np.asin(z/r)
     phi = np.acos(x/(r*np.cos(theta)))
     return (r,theta, phi)
 def s_cart(r,theta,phi):
+    #spherical to cartesian
     x = r*np.cos(theta)*np.cos(phi)
     y = r*np.cos(theta)*np.sin(phi)
     z = r*np.sin(theta)
     return x,y,z
 def c_cylind(x,y,z):
+    #cartesian to cylindrical
     r = np.sqrt((x**2) + (y**2) + (z**2))
     theta = np.acos(x/r)
     z = z
     return(r,theta,z)
 def c_cart(r,theta,z):
+    #cylindrical to cartesian
     x = r*np.cos(theta)
     y = r*np.sin(theta+(np.pi/2))
     z = z
     return(x,y,z)
 
 #Phase space setup
+#Indexed by model/source of velocity dispersion
 phase_isotherm = np.zeros((6,particles))
 phase_nfw = np.zeros((6,particles))
 phase_vc_halo = np.zeros((6,particles))
@@ -56,6 +61,7 @@ phase_vc_disk_halo = np.zeros((6,particles))
 ''' 
 Convention: Each column represents a particle in phase space. The entries down
 a column proceed in the following order: x, y, z, vx, vy, vz.
+Not necessarily computed in x, y, z, should be transformed back at the end.
 '''
 
 '''
@@ -67,7 +73,7 @@ for i in range(len(phase_isotherm[0,:])):
     phase_isotherm[1,i] = (2*rand[i])-1 #cosine of theta coordinate
     phase_isotherm[2,i] = 2*np.pi*rand[i] #phi coordinate
     density_isotherm = m_halo/(r_vir**3) #rho_0
-    v_c = np.sqrt((4*np.pi*G))
+    v_c = np.sqrt((4*np.pi*G)) #velocity dispersions, equal in all 3 coordinates
     phase_isotherm[3,i] = v_c * (1+(rand[i]/np.sqrt(3)))
     phase_isotherm[4,i] = v_c * (1+(rand[i]/np.sqrt(3)))
     phase_isotherm[5,i] = v_c * (1+(rand[i]/np.sqrt(3)))
