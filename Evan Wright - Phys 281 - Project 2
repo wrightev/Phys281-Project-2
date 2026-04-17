@@ -4,6 +4,8 @@ import matplotlib.pyplot as pl
 from numpy.random import RandomState
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
+
+
 s = RandomState()
 particles = 10000 #number of particles
 m_halo = 10**12 #halo mass
@@ -12,6 +14,7 @@ r_vir = 300 #virial radius in kpc (falloff radius)
 m_disk = 4*(10**10) #disk mass
 p_disk = m_disk/particles #individual particle mass for a disk
 d_scale = 3 #disk scale length
+
 G = 6.674*(10**-11)
 c = 15
 r_trunc = 0.01
