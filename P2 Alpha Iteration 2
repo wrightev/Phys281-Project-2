@@ -168,6 +168,27 @@ def vc_disk(r):
 def vc_total(r):
     return np.sqrt(vc_nfw(r)**2 + vc_disk(r)**2)
 
+def make_disk_only():
+    r = sample_disk_r()
+    theta = 2*np.pi*RS.rand(N)
+
+    z = RS.randn(N) * (0.3/300)
+
+    x, y, z = cylindrical_to_cartesian(r, theta, z)
+
+    vc = vc_disk(r)
+
+    vx = -vc * np.sin(theta)
+    vy = vc * np.cos(theta)
+    vz = np.zeros(N)
+
+    W = np.sum(phi_disk(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    print(E)
+
+    return x, y, z, vx, vy, vz, r    
 
 def plot_projection(x, y, z, title=""):
     plt.figure(figsize=(6,6))
@@ -202,3 +223,6 @@ density_profile(r)
 x,y,z,vx,vy,vz,r = make_disk_nfw()
 plot_projection(x,y,z,"Disk (Face-on)")
 plot_projection(x,z,y,"Disk (Edge-on)")
+
+# Disk only
+x,y,z,vx,vy,vz,r = make_disk_only()
