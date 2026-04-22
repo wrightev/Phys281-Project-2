@@ -28,6 +28,9 @@ def cylindrical_to_cartesian(r, theta, z):
     y = r * np.sin(theta)
     return x, y, z
 
+def phi_isotherm(r):
+    return G*np.log(r)
+
 def make_isothermal():
     r = RS.rand(N)
 
@@ -45,6 +48,12 @@ def make_isothermal():
     vx = RS.randn(N) * sigma
     vy = RS.randn(N) * sigma
     vz = RS.randn(N) * sigma
+
+    W = np.sum(phi_isotherm(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    print(E)
 
     return x, y, z, vx, vy, vz
 
@@ -68,6 +77,10 @@ def sample_nfw():
 
     return np.array(r_vals[:N])
 
+def phi_nfw(r): #NFW potential fn
+    rho0 = (c**3)/(4*np.pi*(np.log(1+c)-c/(1+c)))
+    return -(4*np.pi*rho0/(c**3)) * (np.log(1+c*r)/r)
+
 def make_nfw():
     r = sample_nfw()
 
@@ -86,6 +99,12 @@ def make_nfw():
     vx = RS.randn(N)*sigma
     vy = RS.randn(N)*sigma
     vz = RS.randn(N)*sigma
+
+    W_nfw = np.sum(phi_nfw(r))
+    vi2_nfw = (vx**2) + (vy**2) + (vz**2)
+    T_nfw = np.sum(vi2_nfw)
+    E = T_nfw/np.abs(W_nfw)
+    print(E)
 
     return x, y, z, vx, vy, vz, r
 
@@ -114,6 +133,10 @@ def sample_disk_r():
 
     return np.array(r_vals[:N])
 
+def phi_disk(r):
+    a = 2*R_disk
+    return (M_disk/(R_disk*a))*(special.i1(r/a)*special.k0(r/a) - special.i0(r/a)*special.k1(r/a))
+
 def make_disk_nfw():
     r = sample_disk_r()
     theta = 2*np.pi*RS.rand(N)
@@ -127,6 +150,12 @@ def make_disk_nfw():
     vx = -vc * np.sin(theta)
     vy = vc * np.cos(theta)
     vz = np.zeros(N)
+
+    W = np.sum(phi_disk(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    print(E)
 
     return x, y, z, vx, vy, vz, r
 
