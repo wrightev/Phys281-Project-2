@@ -1,0 +1,287 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import RandomState
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
+from scipy import special
+
+RS = RandomState()
+
+N = 100000
+
+G = 1.0
+Rvir = 1.0
+Mvir = 1.0
+
+Rvir_physical = 300
+Mvir_physical = 10**12
+
+M_disk = 0.04  
+R_disk = 3/300
+
+Mdisk_phys = 4*(10**10)
+Dscale = 300
+
+
+def spherical_to_cartesian(r, theta, phi):
+    x = r * np.cos(theta) * np.cos(phi)
+    y = r * np.cos(theta) * np.sin(phi)
+    z = r * np.sin(theta)
+    return x, y, z
+
+def cylindrical_to_cartesian(r, theta, z):
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return x, y, z
+
+def phi_isotherm(r):
+    return G*np.log(r)
+
+def make_isothermal():
+    r = RS.rand(N)
+
+    cos_theta = 2*RS.rand(N) - 1
+    theta = np.arcsin(cos_theta)
+    phi = 2*np.pi*RS.rand(N)
+
+    x, y, z = spherical_to_cartesian(r, theta, phi)
+
+    rho0 = 1/(4*np.pi)  # from M(1)=1
+    vc = np.sqrt(4*np.pi*G*rho0)
+
+    sigma = vc / np.sqrt(3)
+
+    vx = RS.randn(N) * sigma
+    vy = RS.randn(N) * sigma
+    vz = RS.randn(N) * sigma
+
+    W = np.sum(phi_isotherm(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    print(E)
+
+    return x, y, z, vx, vy, vz, r
+
+c = 15
+
+def rho_nfw(r):
+    rho0 = (c**3)/(4*np.pi*(np.log(1+c)-c/(1+c)))
+    return rho0 / (c*r*(1+c*r)**2)
+
+def sample_nfw():
+    r_vals = []
+    while len(r_vals) < N:
+        xrand = RS.rand(N)
+        yrand = RS.rand(N)
+
+        f = 4*np.pi*xrand**2 * rho_nfw(xrand)
+        fmax = np.max(f)
+
+        keep = yrand < f/fmax
+        r_vals.extend(xrand[keep])
+
+    return np.array(r_vals[:N])
+
+def phi_nfw(r): #NFW potential fn
+    rho0 = (c**3)/(4*np.pi*(np.log(1+c)-c/(1+c)))
+    return -(4*np.pi*rho0/(c**3)) * (np.log(1+c*r)/r)
+
+def make_nfw():
+    r = sample_nfw()
+
+    cos_theta = 2*RS.rand(N) - 1
+    theta = np.arcsin(cos_theta)
+    phi = 2*np.pi*RS.rand(N)
+
+    x, y, z = spherical_to_cartesian(r, theta, phi)
+
+    #load dispersion table
+    data = np.loadtxt("NFW_dispersion.dat")
+    interp_sigma = interp1d(data[:,0], data[:,1], fill_value="extrapolate")
+
+    sigma = interp_sigma(r)
+
+    vx = RS.randn(N)*sigma
+    vy = RS.randn(N)*sigma
+    vz = RS.randn(N)*sigma
+
+    W_nfw = np.sum(phi_nfw(r))
+    vi2_nfw = (vx**2) + (vy**2) + (vz**2)
+    T_nfw = np.sum(vi2_nfw)
+    E = T_nfw/np.abs(W_nfw)
+    print(E)
+
+    return x, y, z, vx, vy, vz, r
+
+def M_nfw(r):
+    rho0 = (c**3)/(4*np.pi*(np.log(1+c)-c/(1+c)))
+    return 4*np.pi*rho0/(c**3) * (np.log(1+c*r) - (c*r)/(1+c*r))
+
+def vc_nfw(r):
+    return np.sqrt(G * M_nfw(r) / r)
+
+def sigma_disk(r):
+    return (M_disk/(2*np.pi*R_disk**2)) * np.exp(-r/R_disk)
+
+def sample_disk_r():
+    r_vals = []
+    while len(r_vals) < N:
+        xrand = RS.rand(N)
+        yrand = RS.rand(N)
+
+        f = 2*np.pi*xrand*sigma_disk(xrand)
+        fmax = np.max(f)
+
+        keep = yrand < f/fmax
+        r_vals.extend(xrand[keep])
+
+    return np.array(r_vals[:N])
+
+def phi_disk(r): #Exponential disk potential fn
+    a = 2*R_disk
+    return (M_disk/(R_disk*a))*(special.i1(r/a)*special.k0(r/a) - special.i0(r/a)*special.k1(r/a))
+
+def make_disk_nfw():
+    r = sample_disk_r()
+    theta = 2*np.pi*RS.rand(N)
+
+    z = RS.randn(N) * (0.3/300)
+
+    x, y, z = cylindrical_to_cartesian(r, theta, z)
+
+    vc = vc_nfw(r)
+
+    vx = -vc * np.sin(theta)
+    vy = vc * np.cos(theta)
+    vz = np.zeros(N)
+
+    W = np.sum(np.abs(phi_nfw(r)))
+    vi2 = (vx**2) + (vy**2)
+    T = np.sum(vc**2)
+    E = T/W
+    E_2 = np.sum(vi2/np.abs(phi_nfw(r)))
+    print(T)
+    print(W)
+    print(E)
+    print(E_2)
+
+    return x, y, z, vx, vy, vz, r
+
+def vc_disk(r):
+    x = r/(2*R_disk)
+    return np.sqrt((G*M_disk/(2*R_disk)) * r**2 *
+                   (special.i0(x)*special.k0(x) - special.i1(x)*special.k1(x)))
+
+def vc_total(r):
+    return np.sqrt(vc_nfw(r)**2 + vc_disk(r)**2)
+
+def make_disk_only():
+    r = sample_disk_r()
+    theta = 2*np.pi*RS.rand(N)
+
+    z = RS.randn(N) * (0.3/300)
+
+    x, y, z = cylindrical_to_cartesian(r, theta, z)
+
+    vc = vc_disk(r)
+
+    vx = -vc * np.sin(theta)
+    vy = vc * np.cos(theta)
+    vz = np.zeros(N)
+
+    W = np.sum(phi_disk(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    #print(E)
+
+    return x, y, z, vx, vy, vz, r    
+
+def plot_projection(x, y, z, title="",xlabel="",ylabel=""):
+    plt.figure(figsize=(6,6))
+    plt.hist2d(x, y, bins=100)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.axis("equal")
+    plt.show()
+
+def density_profile(r, bins=50):
+    hist, edges = np.histogram(r, bins=bins)
+    centers = 0.5*(edges[1:] + edges[:-1])
+    vol = (4/3)*np.pi*(edges[1:]**3 - edges[:-1]**3)
+    rho = hist / vol
+
+    plt.loglog(centers, rho, 'o')
+    plt.xlabel("r (kpc)")
+    plt.ylabel("Radial Density (M/kpc^3)")
+    plt.show()
+
+def density_disk(r, bins=50):
+    hist, edges = np.histogram(r, bins=bins)
+    centers = 0.5*(edges[1:] + edges[:-1])
+    area = (4)*np.pi*(edges[1:]**2 - edges[:-1]**2)
+    sigma = hist / area
+
+    plt.loglog(centers, sigma, 'o')
+    plt.xlabel("r (kpc)")
+    plt.ylabel("Surface Density (M/kpc^2)")
+    plt.show()
+
+def make_disk_both():
+    r = sample_disk_r()
+    theta = 2*np.pi*RS.rand(N)
+
+    z = RS.randn(N) * (0.3/300)
+
+    x, y, z = cylindrical_to_cartesian(r, theta, z)
+
+    vc = vc_total(r)
+
+    vx = -vc * np.sin(theta)
+    vy = vc * np.cos(theta)
+    vz = np.zeros(N)
+
+    W = np.sum(phi_disk(r))
+    vi2 = (vx**2) + (vy**2) + (vz**2)
+    T = np.sum(vi2)
+    E = T/np.abs(W)
+    #print(E)
+
+    return x, y, z, vx, vy, vz, r
+
+# Isothermal
+x,y,z,vx,vy,vz,r = make_isothermal()
+#plot_projection(x,y,z,"Isothermal Sphere, x-y plane","x","z")
+#plot_projection(z,y,x,"Isothermal Sphere, y-z plane")
+#density_profile(r)
+#plt.hist(Rvir_physical*r,bins=50)
+
+# NFW
+x,y,z,vx,vy,vz,r = make_nfw()
+#plot_projection(x,y,z,"NFW Halo, x-y plane")
+#plot_projection(z,y,x,"NFW Halo, y-z plane")
+#plt.hist(Rvir_physical*r,bins=50)
+#fig = plt.figure()
+#ax1 = density_profile(Rvir_physical*r)
+#ax2 = plt.scatter(Rvir_physical*r,((Mvir_physical/(Rvir_physical**3))*(4*np.pi*(r**2)*rho_nfw(r))))
+
+r_p = np.linspace(0,Dscale,1000)
+
+# Disk with vc from NFW
+x,y,z,vx,vy,vz,r = make_disk_nfw()
+#plot_projection(x,y,z,"Disk (Face-on)")
+#plot_projection(x,z,y,"Disk (Edge-on)")
+#plt.hist(Dscale*r,bins=50)
+#plt.plot(r_p,sigma_disk(r_p))
+density_disk(r)
+plt.show()
+
+# Disk with vc from disk
+x,y,z,vx,vy,vz,r = make_disk_only()
+#plot_projection(x,y,z,"Disk (Face-on)")
+#plot_projection(z,x,y,"Disk (Edge-on)")
+
+# Disk with vc from disk + NFW
+x,y,z,vx,vy,vz,r = make_disk_both()
