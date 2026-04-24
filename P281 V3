@@ -21,6 +21,7 @@ R_disk = 3/300
 
 Mdisk_phys = 4*(10**10)
 Dscale = 300
+sigma_scale = (10**12)/(300**2)
 
 
 def spherical_to_cartesian(r, theta, phi):
@@ -114,12 +115,15 @@ def make_nfw():
 
     return x, y, z, vx, vy, vz, r
 
-def M_nfw(r):
+def M_nfw(r, c):
     rho0 = (c**3)/(4*np.pi*(np.log(1+c)-c/(1+c)))
     return 4*np.pi*rho0/(c**3) * (np.log(1+c*r) - (c*r)/(1+c*r))
 
 def vc_nfw(r):
-    return np.sqrt(G * M_nfw(r) / r)
+    return np.sqrt(G * M_nfw(r,15) / r)
+
+def vc_nfw_100(r):
+    return np.sqrt(G * M_nfw(r,100) / r)
 
 def sigma_disk(r):
     return (M_disk/(2*np.pi*R_disk**2)) * np.exp(-r/R_disk)
@@ -150,7 +154,7 @@ def make_disk_nfw():
 
     x, y, z = cylindrical_to_cartesian(r, theta, z)
 
-    vc = vc_nfw(r)
+    vc = vc_nfw_100(r)
 
     vx = -vc * np.sin(theta)
     vy = vc * np.cos(theta)
@@ -166,7 +170,7 @@ def make_disk_nfw():
     print(E)
     print(E_2)
 
-    return x, y, z, vx, vy, vz, r
+    return x, y, z, r, vc
 
 def vc_disk(r):
     x = r/(2*R_disk)
@@ -196,7 +200,7 @@ def make_disk_only():
     E = T/np.abs(W)
     #print(E)
 
-    return x, y, z, vx, vy, vz, r    
+    return x, y, z, r, vc
 
 def plot_projection(x, y, z, title="",xlabel="",ylabel=""):
     plt.figure(figsize=(6,6))
@@ -249,7 +253,7 @@ def make_disk_both():
     E = T/np.abs(W)
     #print(E)
 
-    return x, y, z, vx, vy, vz, r
+    return x, y, z, r, vc
 
 # Isothermal
 x,y,z,vx,vy,vz,r = make_isothermal()
@@ -267,21 +271,27 @@ x,y,z,vx,vy,vz,r = make_nfw()
 #ax1 = density_profile(Rvir_physical*r)
 #ax2 = plt.scatter(Rvir_physical*r,((Mvir_physical/(Rvir_physical**3))*(4*np.pi*(r**2)*rho_nfw(r))))
 
-r_p = np.linspace(0,Dscale,1000)
-
 # Disk with vc from NFW
-x,y,z,vx,vy,vz,r = make_disk_nfw()
+x,y,z,r,vc = make_disk_nfw()
 #plot_projection(x,y,z,"Disk (Face-on)")
 #plot_projection(x,z,y,"Disk (Edge-on)")
 #plt.hist(Dscale*r,bins=50)
-#plt.plot(r_p,sigma_disk(r_p))
-density_disk(r)
-plt.show()
+r_p = np.linspace(0,Dscale,1000)
+#plt.plot(r_p/300,sigma_scale*sigma_disk(r_p/300))
+plt.hist2d(r,vc)
+#plt.hist(r)
+#plt.show()
 
 # Disk with vc from disk
-x,y,z,vx,vy,vz,r = make_disk_only()
+x,y,z,r,vc = make_disk_only()
+plt.scatter(Dscale*r,vc)
 #plot_projection(x,y,z,"Disk (Face-on)")
 #plot_projection(z,x,y,"Disk (Edge-on)")
+plt.show()
 
 # Disk with vc from disk + NFW
-x,y,z,vx,vy,vz,r = make_disk_both()
+x,y,z,r,vc = make_disk_both()
+#plt.scatter(r,vc)
+#plot_projection(x,y,z,"Disk (Face-on)")
+#plot_projection(z,x,y,"Disk (Edge-on)")
+#plt.show()
